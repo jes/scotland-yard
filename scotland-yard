@@ -1,0 +1,153 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use ScotlandYard::Game;
+use ScotlandYard::Input qw(choice number prompt yesno);
+use ScotlandYard::Map;
+
+my $computer_is_mrx = yesno("Is the computer playing as Mr. X? [yes/no]");
+my $ndetectives = number("How many detectives are there, including police?");
+die "Need at least one detective." if $ndetectives < 1;
+
+my @detectives;
+my $next = 'first';
+for my $i (1 .. $ndetectives) {
+    my $colour = prompt("What is the $next detective's colour?");
+    $next = 'next';
+    my $type = choice("What type of detective is the $colour player? [detective/police]", 'detective', 'police');
+    my $station;
+    while (1) {
+        $station = prompt("What station does the $colour $type start on? [or 'pick']");
+        if ('pick' =~ /^$station/) {
+            $station = undef;
+            last;
+        } elsif ($station =~ /^[0-9]+$/ && ScotlandYard::Game->is_station($station)) {
+            last;
+        }
+    }
+
+    push @detectives, {
+        colour => $colour,
+        type => $type,
+        start => $station,
+    };
+}
+
+my $game = ScotlandYard::Game->new(
+    detectives => \@detectives,
+    computer_is_mrx => $computer_is_mrx,
+);
+
+while (1) {
+    print "\n";
+    print "Round $game->{round}\n";
+    for my $d (@{ $game->{detectives} }) {
+        print ucfirst($d->{colour}) . " $d->{type} is at station $d->{station}";
+        if ($d->{type} eq 'detective') {
+            print " and has $d->{tickets}{taxi} taxi, $d->{tickets}{bus} bus, $d->{tickets}{underground} underground tickets\n";
+        } else {
+            print "\n";
+        }
+    }
+    print "Mr. X has $game->{twox_cards} 2X cards and $game->{black_tickets} black tickets\n";
+    print "\n";
+
+    if ($computer_is_mrx) {
+        $game->play_as_mrx;
+        if ($game->mrx_must_reveal($game->{round}+1)) {
+            print "Mr. X must reveal himself next round.\n";
+        }
+        print "\n";
+        handle_detectives_input($game);
+    } else {
+        handle_mrx_input($game);
+        print "\n";
+        $game->play_as_detectives;
+    }
+
+    if ($game->{round} == 24) {
+        print "Mr. X survived 24 rounds. Mr. X wins!\n";
+        exit 0;
+    }
+
+    $game->next_round;
+}
+
+sub handle_detectives_input {
+    my ($game) = @_;
+
+    my @colours;
+    for my $d (@{ $game->{detectives} }) {
+        push @colours, $d->{colour};
+    }
+
+    while (@colours) {
+        my $colour = $colours[0];
+        if (@colours > 1) {
+            $colour = choice("Move which detective? [" . join(',', @colours) . "]", @colours);
+        }
+        my $d = $game->detective($colour);
+        my $station = number("Move $colour $d->{type} from station $d->{station} to ?");
+        my @transports = ScotlandYard::Map->transports($d->{station}, $station);
+        if (!@transports) {
+            print "There is no transport from $d->{station} to $station.\n";
+            next;
+        }
+        if ($d->{type} ne 'police') {
+            # reduce the set of transports to that which we have tickets for
+            @transports = grep { $d->{tickets}{$_} > 0 } @transports;
+        }
+        if (!@transports) {
+            print ucfirst($colour) . " $d->{type} has no tickets for transport from $d->{station} to $station.\n";
+            next;
+        }
+        my $type = $transports[0];
+        if ($d->{type} ne 'police' && @transports > 1) {
+            $type = choice("Which form of transport? [" . join(',', @transports) . "]", @transports);
+        }
+
+        print ucfirst($colour) . " $d->{type} moves from $d->{station} to $station via $type.\n";
+
+        if ($game->{computer_is_mrx} && $station == $game->{mrx_station}) {
+            print "Mr. X is captured. Detectives win!\n";
+            exit 0;
+        }
+        $game->detective_movement($colour, $type, $station);
+        @colours = grep { $_ ne $colour } @colours;
+    }
+}
+
+sub handle_mrx_input {
+    my ($game) = @_;
+
+    # TODO: implement 'reset'
+
+    my $is_2x = $game->{twox_cards} > 0 ? yesno("Does Mr. X use a 2x card? [yes/no]") : 0;
+
+    handle_one_mrx_input($game);
+    if ($is_2x) {
+        $game->next_round;
+        handle_one_mrx_input($game);
+    }
+}
+
+sub handle_one_mrx_input {
+    my ($game) = @_;
+
+    my $has_black = $game->{black_tickets} > 0;
+    my @types = ('bus', 'taxi', 'underground', ($game->{black_tickets} > 0 ? 'black' : ()));
+
+    my $movement = choice("How does Mr. X travel? [" . join(',', @types) . "]", @types);
+    $game->mrx_movement($movement);
+
+    if ($game->mrx_must_reveal) {
+        my $station;
+        while (1) {
+            $station = number("What station is Mr. X on?");
+            last if ScotlandYard::Game->is_station($station);
+        }
+        $game->mrx_station($station);
+    }
+}

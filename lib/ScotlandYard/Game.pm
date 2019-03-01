@@ -4,6 +4,10 @@ use strict;
 use warnings;
 
 use List::Util qw(shuffle);
+use Storable qw(dclone);
+
+use ScotlandYard::AI;
+use ScotlandYard::Map;
 
 my @DETECTIVE_STARTS = qw(13 26 29 34 50 53 91 94 103 112 117 123 138 141 155 174);
 my @MRX_STARTS = qw(35 45 51 71 78 104 106 127 132 146 166 170 172);
@@ -50,6 +54,12 @@ sub new {
     return $self;
 }
 
+sub clone {
+    my ($self) = @_;
+
+    return dclone($self);
+}
+
 sub is_station {
     my ($pkg, $station) = @_;
     return 0 if $station !~ /^[0-9]+$/; # no non-integer stations
@@ -59,17 +69,17 @@ sub is_station {
 
 sub mrx_movement {
     my ($self, $type) = @_;
-    my @possible;
+    my %is_possible;
     # update mrx_possible_stations (we know he moved to an adjacent station)
     for my $a (@{ $self->{mrx_possible_stations} }) {
         for my $b (ScotlandYard::Map->adjacent_stations($a)) {
             next if $self->station_has_detective($b);
             next if $type ne 'black' && $type ne $b->{type};
-            push @possible, $b->{station};
+            $is_possible{$b->{station}} = 1;
         }
     }
     $self->{black_tickets}-- if $type eq 'black';
-    $self->{mrx_possible_stations} = \@possible;
+    $self->{mrx_possible_stations} = [keys %is_possible];
 }
 
 # XXX: you should ensure that the movement is legal before calling this
@@ -106,19 +116,6 @@ sub station_has_detective {
 sub next_round {
     my ($self) = @_;
 
-    if ($self->{computer_is_mrx}) {
-        my $have_legal_moves = 0;
-        for my $adj (ScotlandYard::Map->adjacent_stations($self->{mrx_station})) {
-            next if $adj->{type} eq 'ferry' && $self->{black_tickets} == 0;
-            $have_legal_moves++ if !$self->station_has_detective($adj->{station});
-        }
-        if (!$have_legal_moves) {
-            # TODO: this should be usable within hypothetical games (i.e. just die instead?)
-            print "Mr. X is surrounded. Detectives win!\n";
-            exit 0;
-        }
-    }
-
     $self->{round}++;
 }
 
@@ -133,21 +130,16 @@ sub detective {
 sub play_as_mrx {
     my ($self) = @_;
 
-    my @stations = shuffle ScotlandYard::Map->adjacent_stations($self->{mrx_station});
+    my ($move, $score) = ScotlandYard::AI->best_mrx_move($self);
 
-    # move to first station that is a legal move
-    # TODO: abstract this into minimax search
-    for my $s (@stations) {
-        next if $s->{type} eq 'ferry' && $self->{black_tickets} <= 0;
-        next if $self->station_has_detective($s->{station});
-
-        my $type = $s->{type};
-        $type = 'black' if $type eq 'ferry';
-        print "Mr. X travels with a $type ticket.\n";
-        $self->mrx_movement($s->{type});
-        $self->{mrx_station} = $s->{station};
-        last;
+    if (!defined $move) {
+        print "Mr. X is surrounded. Detectives win!\n";
+        exit 0;
     }
+
+    print "Mr. X travels with a $move->{type} ticket.\n";
+    $self->mrx_movement($move->{type});
+    $self->{mrx_station} = $move->{station};
 
     print "Mr. X is now at station $self->{mrx_station}.\n" if $self->mrx_must_reveal;
 }

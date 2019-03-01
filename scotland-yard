@@ -86,7 +86,7 @@ sub handle_detectives_input {
     while (@colours) {
         my $colour = $colours[0];
         if (@colours > 1) {
-            $colour = choice("Move which detective? [" . join(',', @colours) . "]", @colours);
+            $colour = choice("Move which detective? [" . join('/', @colours) . "]", @colours);
         }
         my $d = $game->detective($colour);
         my $station = number("Move $colour $d->{type} from station $d->{station} to ?");
@@ -105,7 +105,7 @@ sub handle_detectives_input {
         }
         my $type = $transports[0];
         if ($d->{type} ne 'police' && @transports > 1) {
-            $type = choice("Which form of transport? [" . join(',', @transports) . "]", @transports);
+            $type = choice("Which form of transport? [" . join('/', @transports) . "]", @transports);
         }
 
         print ucfirst($colour) . " $d->{type} moves from $d->{station} to $station via $type.\n";
@@ -139,7 +139,7 @@ sub handle_one_mrx_input {
     my $has_black = $game->{black_tickets} > 0;
     my @types = ('bus', 'taxi', 'underground', ($game->{black_tickets} > 0 ? 'black' : ()));
 
-    my $movement = choice("How does Mr. X travel? [" . join(',', @types) . "]", @types);
+    my $movement = choice("How does Mr. X travel? [" . join('/', @types) . "]", @types);
     $game->mrx_movement($movement);
 
     if ($game->mrx_must_reveal) {

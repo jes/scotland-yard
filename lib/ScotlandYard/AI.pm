@@ -52,6 +52,7 @@ sub mrx_evaluate {
     # TODO: incorporate some measure of the uncertainty level that the detectives have in
     # mr. x's location; also incorporate a value for the 2X cards and black tickets
 
+    my $possible_places = @{ $game->{mrx_possible_stations} };
     my $minshortest = 1000;
     my $sum = 0;
 
@@ -62,7 +63,7 @@ sub mrx_evaluate {
         $minshortest = $len if $len < $minshortest;
     }
 
-    return $minshortest+$sum/10;
+    return $minshortest+$sum/10+$possible_places/10;
 }
 
 sub shortest_path {

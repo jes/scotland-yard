@@ -48,10 +48,14 @@ sub new {
     $self->{round} = 1;
 
     if ($self->{computer_is_mrx}) {
-        $self->{mrx_station} = $MRX_STARTS[rand @MRX_STARTS];
+        $self->{mrx_station} = $self->random_mrx_start;
     }
 
     return $self;
+}
+
+sub random_mrx_start {
+    return $MRX_STARTS[rand @MRX_STARTS];
 }
 
 sub clone {
@@ -145,7 +149,18 @@ sub play_as_mrx {
 }
 
 sub play_as_detectives {
-    die "Computer can't play as detective (not implemented)\n";
+    my ($self) = @_;
+
+    my ($move, $score) = ScotlandYard::AI->best_detectives_move($self);
+
+    die "no move??" if !defined $move;
+
+    for my $m (@$move) {
+        my ($colour, $type, $station) = @$m;
+        my $d = $self->detective($colour);
+        print ucfirst($colour) . " $d->{type} moves from $d->{station} to $station via $type.\n";
+        $self->detective_movement($colour, $type, $station);
+    }
 }
 
 1;

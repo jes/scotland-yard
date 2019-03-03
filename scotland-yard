@@ -31,9 +31,11 @@ for my $i (1 .. $ndetectives) {
     push @detectives, {
         colour => $colour,
         type => $type,
-        start => $station,
+        station => $station,
     };
 }
+
+print "Mr. X starts on station " . ScotlandYard::Game->random_mrx_start . "\n";
 
 my $game = ScotlandYard::Game->new(
     detectives => \@detectives,
@@ -124,10 +126,11 @@ sub handle_mrx_input {
 
     # TODO: implement 'reset'
 
-    my $is_2x = $game->{twox_cards} > 0 ? yesno("Does Mr. X use a 2x card? [yes/no]") : 0;
+    my $is_2x = $game->{twox_cards} > 0 ? yesno("Does Mr. X use a 2X card? [yes/no]") : 0;
 
     handle_one_mrx_input($game);
     if ($is_2x) {
+        $game->{twox_cards}--;
         $game->next_round;
         handle_one_mrx_input($game);
     }
@@ -137,7 +140,7 @@ sub handle_one_mrx_input {
     my ($game) = @_;
 
     my $has_black = $game->{black_tickets} > 0;
-    my @types = ('bus', 'taxi', 'underground', ($game->{black_tickets} > 0 ? 'black' : ()));
+    my @types = ('taxi', 'bus', 'underground', ($game->{black_tickets} > 0 ? 'black' : ()));
 
     my $movement = choice("How does Mr. X travel? [" . join('/', @types) . "]", @types);
     $game->mrx_movement($movement);

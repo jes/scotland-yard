@@ -35,7 +35,7 @@ for my $i (1 .. $ndetectives) {
     };
 }
 
-print "Mr. X starts on station " . ScotlandYard::Game->random_mrx_start . "\n";
+print "Mr. X starts on station " . ScotlandYard::Game->random_mrx_start . "\n" if !$computer_is_mrx;
 
 my $game = ScotlandYard::Game->new(
     detectives => \@detectives,
@@ -58,6 +58,7 @@ while (1) {
 
     if ($computer_is_mrx) {
         $game->play_as_mrx;
+        print "Mr. X can be on any of " . join(',', sort {$a <=> $b} @{ $game->{mrx_possible_stations} }) . "\n";
         if ($game->mrx_must_reveal($game->{round}+1)) {
             print "Mr. X must reveal himself next round.\n";
         }
@@ -65,6 +66,7 @@ while (1) {
         handle_detectives_input($game);
     } else {
         handle_mrx_input($game);
+        print "Mr. X can be on any of " . join(',', sort {$a <=> $b} @{ $game->{mrx_possible_stations} }) . "\n";
         print "\n";
         $game->play_as_detectives;
     }

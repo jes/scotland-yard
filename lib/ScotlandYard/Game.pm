@@ -95,6 +95,9 @@ sub detective_movement {
             $d->{station} = $station;
         }
     }
+
+    # assuming the game continues, mr. x can't be on this station now
+    $self->{mrx_possible_stations} = [grep { $_ != $station } @{ $self->{mrx_possible_stations} }];
 }
 
 sub mrx_must_reveal {
@@ -134,26 +137,60 @@ sub detective {
 sub play_as_mrx {
     my ($self) = @_;
 
-    my ($move, $score) = ScotlandYard::AI->best_mrx_move($self);
+    my $start = time;
+    my $min_time = 10; # spend at least $min_time seconds thinking
+    my $max_time = 30; # don't spend more than $max_time seconds thinking
+    my $min_depth = 1;
+    my $completed_ply = 0;
+
+    my $move;
+    while (time < $start+$min_time) {
+        print "Start $min_depth ply search\n";
+        my ($newmove, undef) = ScotlandYard::AI->best_mrx_move($self, $min_depth++, $start+$max_time, 1);
+        $move = $newmove if $newmove;
+        $completed_ply = $min_depth-1 if $newmove;
+
+        last if !defined $newmove && time < $start+$max_time; # no legal moves, game over
+    }
 
     if (!defined $move) {
         print "Mr. X is surrounded. Detectives win!\n";
         exit 0;
     }
 
+    print "(searched $completed_ply ply)\n";
+
     print "Mr. X travels with a $move->{type} ticket.\n";
     $self->mrx_movement($move->{type});
     $self->{mrx_station} = $move->{station};
 
-    print "Mr. X is now at station $self->{mrx_station}.\n" if $self->mrx_must_reveal;
+    if ($self->mrx_must_reveal) {
+        print "Mr. X is now at station $self->{mrx_station}.\n";
+        $self->mrx_station($self->{mrx_station});
+    }
 }
 
 sub play_as_detectives {
     my ($self) = @_;
 
-    my ($move, $score) = ScotlandYard::AI->best_detectives_move($self);
+    my $start = time;
+    my $min_time = 10; # spend at least $min_time seconds thinking
+    my $max_time = 30; # don't spend more than $max_time seconds thinking
+    my $min_depth = 1;
+    my $completed_ply = 0;
+
+    my $move;
+    while (time < $start+$min_time) {
+        print "Start $min_depth ply search\n";
+        $self->{mrx_station} = undef;
+        my ($newmove, undef) = ScotlandYard::AI->best_detectives_move($self, $min_depth++, $start+$max_time);
+        $move = $newmove if $newmove;
+        $completed_ply = $min_depth-1 if $newmove;
+    }
 
     die "no move??" if !defined $move;
+
+    print "(searched $completed_ply ply)\n";
 
     for my $m (@$move) {
         my ($colour, $type, $station) = @$m;

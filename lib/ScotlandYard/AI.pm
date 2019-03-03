@@ -7,11 +7,8 @@ use List::Util qw(shuffle);
 
 use ScotlandYard::Map;
 
-my $SEARCHDEPTH = 2;
-
 sub best_mrx_move {
-    my ($pkg, $game, $depth) = @_;
-    $depth //= $SEARCHDEPTH;
+    my ($pkg, $game, $depth, $end_time, $is_toplevel) = @_;
 
     if ($depth <= 0) {
         my $s = $pkg->mrx_evaluate($game);
@@ -41,8 +38,15 @@ sub best_mrx_move {
         my $newgame = $game->clone;
         $newgame->mrx_movement($m->{type});
         $newgame->{mrx_station} = $m->{station};
+        $newgame->mrx_station($m->{station}) if $newgame->mrx_must_reveal;
 
-        my ($detective_move, $score) = $pkg->best_detectives_move($newgame, $depth-1);
+        my ($detective_move, $score) = $pkg->best_detectives_move($newgame, $depth-1, $end_time);
+        return (undef, undef) if time >= $end_time;
+
+        if ($is_toplevel) {
+            print "Move by $m->{type} to $m->{station} scores $score\n";
+        }
+
         if ($score > $bestscore) {
             $bestmove = $m;
             $bestscore = $score;
@@ -84,8 +88,7 @@ sub dfs_detective_moves {
 }
 
 sub best_detectives_move {
-    my ($pkg, $game, $depth) = @_;
-    $depth //= $SEARCHDEPTH-1;
+    my ($pkg, $game, $depth, $end_time) = @_;
 
     if ($depth <= 0) {
         my $s = $pkg->mrx_evaluate($game);
@@ -104,12 +107,21 @@ sub best_detectives_move {
             $newgame->detective_movement($colour, $type, $station);
         }
 
-        # need to test for every station that mr. x could be at
         my $score = -1;
+        my @possible = @{ $newgame->{mrx_possible_stations} };
+        @possible = ($newgame->{mrx_station}) if $newgame->{mrx_station};
+        # need to test for every station that mr. x could be at
         # we want to find the move that gives the *worst* possible *best* score for mr. x
-        for my $mrx_station (@{ $newgame->{mrx_possible_stations} }) {
+        for my $mrx_station (@possible) {
             $newgame->{mrx_station} = $mrx_station;
-            my ($mrx_move, $mrx_score) = $pkg->best_mrx_move($newgame, $depth-1);
+            my $mrx_score;
+            if ($newgame->station_has_detective($mrx_station)) {
+                # if detectives step onto mr. x, they win
+                $mrx_score = -1;
+            } else {
+                (undef, $mrx_score) = $pkg->best_mrx_move($newgame, $depth-1, $end_time);
+            }
+            return (undef, undef) if time >= $end_time;
             $score = $mrx_score if $mrx_score > $score;
         }
 
@@ -139,7 +151,7 @@ sub mrx_evaluate {
         $minshortest = $len if $len < $minshortest;
     }
 
-    return $minshortest+$sum/10+$possible_places/10;
+    return $minshortest+$sum/100+$possible_places/100;
 }
 
 my %SHORTEST_PATH;
